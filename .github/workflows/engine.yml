@@ -1,7 +1,7 @@
 name: Cv1
 on:
   repository_dispatch:
-    types: [run-live-script] # يجب أن يطابق event_type في run-job.js
+    types: [run-live-script] # هذا هو المحرك الذي ينتظر إشارة Netlify
 
 jobs:
   execute-automation:
@@ -18,7 +18,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y xvfb x11vnc novnc jq
 
-      - name: Install SeleniumBase
+      - name: Install Dependencies
         run: |
           pip install seleniumbase undetected-chromedriver requests
           seleniumbase install chromedriver
@@ -35,20 +35,17 @@ jobs:
           x11vnc -display :99 -forever -nopw -listen localhost &
           /usr/share/novnc/utils/launch.sh --vnc localhost:5900 --listen 8080 &
           
-          # تثبيت وتشغيل Ngrok
           curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
           echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
           sudo apt-get update && sudo apt-get install ngrok
           ngrok config add-authtoken $NGROK_TOKEN
           ngrok http 8080 > /dev/null &
-          sleep 5
+          sleep 8
           
-          # إرسال الرابط المباشر لسوبابيز
           LIVE_URL=$(curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url')
           curl -X POST "$SB_URL/rest/v1/jobs" \
           -H "apikey: $SB_KEY" -H "Content-Type: application/json" \
           -d "{\"user_id\": \"${{ github.event.client_payload.user_id }}\", \"live_url\": \"$LIVE_URL/vnc.html?autoconnect=true\"}"
           
-          # تشغيل الكود مع حل تخطي الحماية
           echo "${{ github.event.client_payload.script_code }}" > task.py
           python task.py
